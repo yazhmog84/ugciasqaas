@@ -1,16 +1,29 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client' // ✅ Correction 1 : On importe la fonction
+import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Video, Sparkles, MessageSquare, Loader2 } from 'lucide-react'
 
-// Mêmes images que le backend pour la cohérence
+// Pour l'endpoint /talks, on utilise l'URL de l'image (img).
+// Les IDs ici servent juste à la sélection dans l'interface React.
 const AVATARS = [
-  { id: 'emma', name: 'Emma', img: 'https://img.freepik.com/free-photo/portrait-young-businesswoman-holding-eyeglasses-hand-against-gray-background_23-2148029483.jpg' },
-  { id: 'marcus', name: 'Marcus', img: 'https://img.freepik.com/free-photo/handsome-confident-smiling-man-with-hands-crossed-chest_176420-18743.jpg' },
-  { id: 'sophie', name: 'Sophie', img: 'https://img.freepik.com/free-photo/portrait-beautiful-young-woman-standing-grey-wall_231208-10760.jpg' },
+  { 
+    id: 'emma', 
+    name: 'Emma', 
+    img: 'https://img.freepik.com/free-photo/portrait-young-businesswoman-holding-eyeglasses-hand-against-gray-background_23-2148029483.jpg' 
+  },
+  { 
+    id: 'marcus', 
+    name: 'Marcus', 
+    img: 'https://img.freepik.com/free-photo/handsome-confident-smiling-man-with-hands-crossed-chest_176420-18743.jpg' 
+  },
+  { 
+    id: 'sophie', 
+    name: 'Sophie', 
+    img: 'https://img.freepik.com/free-photo/portrait-beautiful-young-woman-standing-grey-wall_231208-10760.jpg' 
+  },
 ]
 
 export default function CreateVideoPage() {
@@ -21,7 +34,6 @@ export default function CreateVideoPage() {
   const [error, setError] = useState('')
   const router = useRouter()
   
-  // ✅ Correction 2 : On initialise le client ici
   const supabase = createClient()
 
   useEffect(() => {
@@ -32,8 +44,8 @@ export default function CreateVideoPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
     
-    // On récupère les crédits depuis la table 'users'
-    const { data } = await supabase.from('users').select('credits').eq('id', user.id).single()
+    // On utilise maybeSingle() pour éviter les crashs si l'user n'est pas encore en base
+    const { data } = await supabase.from('users').select('credits').eq('id', user.id).maybeSingle()
     if (data) setCredits(data.credits)
   }
 
@@ -45,31 +57,35 @@ export default function CreateVideoPage() {
     setError('')
 
     try {
-        // On récupère la session pour le token
         const { data: { session } } = await supabase.auth.getSession()
         
-        // ✅ Correction 3 : La bonne URL de l'API (celle qu'on a créée ensemble)
+        // 1. On récupère l'URL de l'image correspondant à l'avatar choisi
+        const selectedAvatarObj = AVATARS.find(av => av.id === selectedAvatar)
+        if (!selectedAvatarObj) throw new Error("Avatar introuvable")
+
+        // 2. Appel à notre API Backend
         const res = await fetch('/api/generate-video', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                // On passe le token pour sécuriser (optionnel si géré par cookies, mais recommandé)
                 'Authorization': `Bearer ${session?.access_token}`
             },
             body: JSON.stringify({ 
                 script, 
-                avatarId: selectedAvatar,
-                userId: session?.user?.id // On passe l'ID user explicitement
+                // 👇 C'est ICI le changement important : on envoie l'URL de l'image
+                avatarUrl: selectedAvatarObj.img 
             })
         })
 
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Erreur API')
 
+        // 3. Redirection vers la page de visualisation
         router.push(`/video/${data.videoId}`)
 
     } catch (e: any) {
-        setError(e.message)
+        console.error(e)
+        setError(e.message || "Une erreur est survenue")
     } finally {
         setLoading(false)
     }
@@ -91,7 +107,7 @@ export default function CreateVideoPage() {
                 <div className="relative">
                     <textarea 
                         className="w-full h-64 bg-slate-900 border border-white/10 rounded-xl p-4 focus:ring-2 focus:ring-blue-500 outline-none text-lg leading-relaxed"
-                        placeholder="Entrez votre texte ici... (Ex: Salut tout le monde, aujourd'hui je vous présente...)"
+                        placeholder="Entrez votre texte ici... (Ex: Bonjour à tous, bienvenue dans cette présentation...)"
                         value={script}
                         onChange={e => setScript(e.target.value)}
                     />
