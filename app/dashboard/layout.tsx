@@ -1,133 +1,105 @@
-// app/dashboard/page.tsx
+// app/dashboard/layout.tsx
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
-import { ArrowUpRight, Play, Clock, MoreVertical, Plus } from 'lucide-react'
+import { usePathname } from 'next/navigation'
+import { LayoutDashboard, PlusCircle, Film, CreditCard, Settings, LogOut, Sparkles, Bell, Search } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
 
-export default function DashboardPage() {
-  const [videos, setVideos] = useState<any[]>([])
-  const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+  const router = useRouter()
 
-  useEffect(() => {
-    async function loadData() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: userData } = await supabase.from('users').select('*').eq('id', user.id).single()
-        setUser(userData)
-        const { data: videosData } = await supabase.from('videos').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(6)
-        setVideos(videosData || [])
-      }
-      setLoading(false)
-    }
-    loadData()
-  }, [])
+  const navigation = [
+    { name: 'Vue d\'ensemble', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Créer une vidéo', href: '/create', icon: PlusCircle },
+    { name: 'Mes Vidéos', href: '/dashboard/library', icon: Film }, // Tu pourras créer cette page plus tard
+    { name: 'Abonnement', href: '/pricing', icon: CreditCard },
+    { name: 'Paramètres', href: '/dashboard/settings', icon: Settings },
+  ]
 
-  if (loading) return <div className="text-white">Chargement...</div>
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
   return (
-    <div className="space-y-8">
-      {/* Welcome Section */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Bonjour, Créateur 👋</h1>
-          <p className="text-slate-400 mt-1">Voici ce qu'il se passe avec vos vidéos aujourd'hui.</p>
-        </div>
-        <Link href="/create" className="bg-white text-slate-900 px-6 py-3 rounded-xl font-bold hover:bg-slate-200 transition flex items-center gap-2 shadow-lg shadow-white/5">
-          <Plus size={18} />
-          Nouvelle Vidéo
-        </Link>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 relative overflow-hidden group hover:border-purple-500/30 transition">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/10 rounded-full blur-3xl group-hover:bg-purple-600/20 transition"></div>
-          <p className="text-slate-400 text-sm font-medium mb-1">Crédits restants</p>
-          <div className="text-4xl font-bold text-white mb-2">{user?.credits || 0}</div>
-          <Link href="/pricing" className="text-purple-400 text-xs font-bold hover:underline flex items-center gap-1">
-            Recharger le compte <ArrowUpRight size={12} />
+    <div className="min-h-screen bg-slate-950 flex">
+      {/* SIDEBAR */}
+    <aside className="w-64 bg-slate-900/50 backdrop-blur-xl border-r border-white/5 flex flex-col fixed h-full z-20 hidden md:flex">
+        <div className="p-6">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
+              <Sparkles className="w-5 h-5 text-white" />
+            </div>
+            <span className="font-bold text-lg text-white">VideoUGC<span className="text-purple-400">.ai</span></span>
           </Link>
         </div>
 
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 relative overflow-hidden group hover:border-blue-500/30 transition">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 rounded-full blur-3xl group-hover:bg-blue-600/20 transition"></div>
-          <p className="text-slate-400 text-sm font-medium mb-1">Vidéos générées</p>
-          <div className="text-4xl font-bold text-white mb-2">{videos.length}</div>
-          <p className="text-green-400 text-xs flex items-center gap-1">
-             +2 cette semaine
-          </p>
-        </div>
+        <nav className="flex-1 px-4 space-y-2 mt-4">
+          {navigation.map((item) => {
+            const isActive = pathname === item.href
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all ${
+                  isActive 
+                    ? 'bg-purple-600/10 text-purple-400 border border-purple-500/20' 
+                    : 'text-slate-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <item.icon size={20} />
+                {item.name}
+              </Link>
+            )
+          })}
+        </nav>
 
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 relative overflow-hidden group hover:border-pink-500/30 transition">
-           <div className="absolute top-0 right-0 w-32 h-32 bg-pink-600/10 rounded-full blur-3xl group-hover:bg-pink-600/20 transition"></div>
-          <p className="text-slate-400 text-sm font-medium mb-1">Plan Actuel</p>
-          <div className="text-4xl font-bold text-white mb-2 capitalize">{user?.subscription_plan || 'Free'}</div>
-          <Link href="/pricing" className="text-pink-400 text-xs font-bold hover:underline flex items-center gap-1">
-            Passer Pro <ArrowUpRight size={12} />
-          </Link>
+        <div className="p-4 border-t border-white/5">
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-4 py-3 w-full text-sm font-medium text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition"
+          >
+            <LogOut size={20} />
+            Déconnexion
+          </button>
         </div>
-      </div>
+      </aside>
 
-      {/* Recent Videos Grid */}
-      <div>
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-white">Vidéos Récentes</h2>
-          <Link href="/dashboard/library" className="text-sm text-purple-400 hover:text-purple-300">Tout voir</Link>
-        </div>
+      {/* MAIN CONTENT area */}
+      <div className="flex-1 md:ml-64 flex flex-col min-h-screen">
+        {/* TOP BAR */}
+        <header className="h-16 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-10 px-8 flex items-center justify-between">
+          <div className="flex items-center gap-4 text-slate-400 text-sm">
+            <span className="hidden md:inline">Dashboard</span>
+            <span className="hidden md:inline">/</span>
+            <span className="text-white font-medium">Vue d'ensemble</span>
+          </div>
 
-        {videos.length === 0 ? (
-          <div className="text-center py-20 border border-dashed border-white/10 rounded-2xl bg-white/5">
-             <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-500">
-                <Film size={32} />
+          <div className="flex items-center gap-6">
+             {/* Search Fake */}
+             <div className="hidden md:flex items-center bg-white/5 rounded-full px-4 py-1.5 border border-white/10 focus-within:border-purple-500/50 transition">
+                <Search size={14} className="text-slate-500 mr-2" />
+                <input type="text" placeholder="Rechercher une vidéo..." className="bg-transparent outline-none text-sm text-white placeholder-slate-600 w-48" />
              </div>
-             <p className="text-white font-medium">Aucune vidéo</p>
-             <p className="text-slate-500 text-sm mb-4">Créez votre première vidéo en quelques secondes.</p>
-             <Link href="/create" className="text-purple-400 hover:text-purple-300 text-sm font-bold">Commencer →</Link>
+             
+             {/* Notifications */}
+             <button className="relative text-slate-400 hover:text-white transition">
+                <Bell size={20} />
+                <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border-2 border-slate-950"></span>
+             </button>
+             
+             {/* Avatar User */}
+             <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 border border-white/20"></div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {videos.map((video) => (
-              <div key={video.id} className="bg-slate-900 border border-white/10 rounded-xl overflow-hidden group hover:border-white/20 transition">
-                {/* Thumbnail fake */}
-                <div className="aspect-video bg-black relative flex items-center justify-center group-hover:bg-black/80 transition">
-                   {video.status === 'completed' ? (
-                     <video src={video.video_url} className="w-full h-full object-cover opacity-60 group-hover:opacity-40 transition" />
-                   ) : (
-                     <div className="animate-pulse bg-white/10 w-full h-full"></div>
-                   )}
-                   
-                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition transform scale-95 group-hover:scale-100">
-                      <Link href={`/video/${video.id}`} className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-black hover:scale-110 transition">
-                         <Play fill="black" size={20} className="ml-1" />
-                      </Link>
-                   </div>
+        </header>
 
-                   <div className="absolute top-2 right-2 px-2 py-1 bg-black/60 backdrop-blur-md rounded text-xs text-white font-medium">
-                      00:30
-                   </div>
-                </div>
-
-                <div className="p-4">
-                  <div className="flex justify-between items-start gap-2 mb-2">
-                    <h3 className="font-semibold text-white line-clamp-1" title={video.script}>{video.script || 'Sans titre'}</h3>
-                    <button className="text-slate-500 hover:text-white"><MoreVertical size={16} /></button>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <Clock size={12} />
-                    <span>{new Date(video.created_at).toLocaleDateString()}</span>
-                    <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
-                    <span className={video.status === 'completed' ? 'text-green-400' : 'text-yellow-400 capitalize'}>
-                      {video.status === 'completed' ? 'Prête' : 'En cours'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* PAGE CONTENT */}
+        <main className="p-8">
+          {children}
+        </main>
       </div>
     </div>
   )
