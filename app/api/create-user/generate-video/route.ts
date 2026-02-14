@@ -1,34 +1,27 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { openai } from '@/lib/openai'
-import { replicate } from '@/lib/replicate'
 
-// Configuration des avatars (URLs publiques nécessaires pour Replicate)
-// Remplace par tes vraies URLs hébergées
+// Configuration des Avatars (URLs publiques accessibles par D-ID)
 const AVATARS: Record<string, string> = {
-  emma: "https://yazhmog84.github.io/assets/avatars/emma.jpg", // Exemple
-  marcus: "https://yazhmog84.github.io/assets/avatars/marcus.jpg",
-  sophie: "https://yazhmog84.github.io/assets/avatars/sophie.jpg",
+  emma: "https://img.freepik.com/free-photo/portrait-young-businesswoman-holding-eyeglasses-hand-against-gray-background_23-2148029483.jpg", 
+  marcus: "https://img.freepik.com/free-photo/handsome-confident-smiling-man-with-hands-crossed-chest_176420-18743.jpg",
+  sophie: "https://img.freepik.com/free-photo/portrait-beautiful-young-woman-standing-grey-wall_231208-10760.jpg",
 }
 
 export async function POST(req: Request) {
   try {
     const { script, avatarId } = await req.json()
-    
-    // --- ÉTAPE 3.1 : AUTHENTIFICATION ---
+
+    // 1. AUTHENTIFICATION
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
     
     const token = authHeader.replace('Bearer ', '')
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
     
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
-    }
+    if (authError || !user) return NextResponse.json({ error: 'Token invalide' }, { status: 401 })
 
-    console.log(`[API] Demande de génération pour User: ${user.id}`)
-
-    // --- ÉTAPE 3.2 : VÉRIFICATION CRÉDITS ---
+    // 2. VERIF CRÉDITS
     const { data: userData } = await supabaseAdmin
       .from('users')
       .select('credits')
@@ -36,19 +29,17 @@ export async function POST(req: Request) {
       .single()
 
     if (!userData || userData.credits < 10) {
-      return NextResponse.json({ error: 'Crédits insuffisants (10 requis)' }, { status: 402 })
+      return NextResponse.json({ error: 'Crédits insuffisants' }, { status: 402 })
     }
 
-    // --- ÉTAPE 3.3 : DÉDUCTION CRÉDITS ---
-    const { error: creditError } = await supabaseAdmin
+    // 3. DÉDUCTION CRÉDITS
+    await supabaseAdmin
       .from('users')
       .update({ credits: userData.credits - 10 })
       .eq('id', user.id)
 
-    if (creditError) throw new Error("Erreur lors de la déduction des crédits")
-
-    // --- ÉTAPE 3.4 : CRÉATION ENTRÉE VIDÉO ---
-    const { data: video, error: insertError } = await supabaseAdmin
+    // 4. INSERTION DB (PROCESSING)
+    const { data: video } = await supabaseAdmin
       .from('videos')
       .insert({
         user_id: user.id,
@@ -59,134 +50,113 @@ export async function POST(req: Request) {
       .select()
       .single()
 
-    if (insertError) throw insertError
-
-    // --- ÉTAPE 3.6 : BACKGROUND PROCESS ---
-    // On lance la tâche sans 'await' pour ne pas bloquer la réponse
-    // Note: Sur Vercel Pro/Hobby, cela peut être coupé. L'idéal est Inngest/Trigger.dev.
-    generateVideoInBackground(video.id, script, avatarId, user.id).catch(err => 
-      console.error("Background Error Uncaught:", err)
+    // 5. LANCEMENT PROCESS D-ID (BACKGROUND)
+    // On ne met pas "await" ici pour répondre immédiatement au client
+    generateVideoWithDID(video.id, script, avatarId, user.id).catch(err => 
+        console.error("Background Error:", err)
     )
 
-    // --- ÉTAPE 3.5 : RÉPONSE IMMÉDIATE ---
     return NextResponse.json({ 
-      success: true, 
-      videoId: video.id,
-      message: "Génération lancée en arrière-plan"
+        success: true, 
+        videoId: video.id,
+        message: "Génération D-ID lancée" 
     })
 
   } catch (error: any) {
-    console.error("[API Error]", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
 
-// --- FONCTION DE GÉNÉRATION (LA MAGIE) ---
-async function generateVideoInBackground(videoId: string, script: string, avatarId: string, userId: string) {
-  console.log(`[BG] Début génération pour Video ${videoId}`)
-  
-  try {
-    // 1. GÉNÉRATION AUDIO (OpenAI TTS)
-    console.log(`[BG] Génération audio OpenAI...`)
-    const mp3 = await openai.audio.speech.create({
-      model: "tts-1-hd",
-      voice: "nova",
-      input: script,
-    })
-    
-    const audioBuffer = Buffer.from(await mp3.arrayBuffer())
-    const audioFileName = `${videoId}_audio.mp3`
-
-    // Upload Audio Supabase
-    const { error: uploadAudioError } = await supabaseAdmin.storage
-      .from('videos')
-      .upload(audioFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true })
-
-    if (uploadAudioError) throw new Error(`Upload Audio Failed: ${uploadAudioError.message}`)
-
-    const { data: audioUrlData } = supabaseAdmin.storage
-      .from('videos')
-      .getPublicUrl(audioFileName)
-    
-    const audioUrl = audioUrlData.publicUrl
-    console.log(`[BG] Audio prêt: ${audioUrl}`)
-
-    // 2. GÉNÉRATION VIDÉO (Replicate SadTalker)
-    console.log(`[BG] Lancement Replicate SadTalker...`)
-    
-    // URL de l'image de l'avatar (fallback sur un placeholder si pas trouvé)
-    const avatarUrl = AVATARS[avatarId] || "https://i.pravatar.cc/500?img=1"
-
-    const output = await replicate.run(
-      "cjwbw/sadtalker:3aa3dac9353cc4d6bd62a35e0f26f701e5dded584752733982c1052e4b98e742",
-      {
-        input: {
-          source_image: avatarUrl,
-          driven_audio: audioUrl,
-          enhancer: "gfpgan",
-          preprocess: "full",
-          still: false
-        }
-      }
-    )
-
-    // Replicate renvoie parfois une string, parfois un tableau selon les versions
-    const rawVideoUrl = Array.isArray(output) ? output[0] : output
-    console.log(`[BG] Replicate terminé: ${rawVideoUrl}`)
-
-    if (!rawVideoUrl) throw new Error("Replicate n'a pas renvoyé d'URL")
-
-    // 3. TÉLÉCHARGEMENT & UPLOAD FINAL
-    console.log(`[BG] Sauvegarde de la vidéo finale...`)
-    const videoRes = await fetch(rawVideoUrl as string)
-    const videoBuffer = Buffer.from(await videoRes.arrayBuffer())
-    const videoFileName = `${videoId}_final.mp4`
-
-    const { error: uploadVideoError } = await supabaseAdmin.storage
-      .from('videos')
-      .upload(videoFileName, videoBuffer, { contentType: 'video/mp4', upsert: true })
-
-    if (uploadVideoError) throw new Error(`Upload Video Failed: ${uploadVideoError.message}`)
-
-    const { data: finalUrlData } = supabaseAdmin.storage
-      .from('videos')
-      .getPublicUrl(videoFileName)
-
-    // 4. MISE À JOUR DB (SUCCESS)
-    await supabaseAdmin
-      .from('videos')
-      .update({
-        status: 'completed',
-        video_url: finalUrlData.publicUrl,
-        audio_url: audioUrl,
-        completed_at: new Date().toISOString()
-      })
-      .eq('id', videoId)
-    
-    console.log(`[BG] SUCCÈS TOTAL Video ${videoId}`)
-
-  } catch (error: any) {
-    console.error(`[BG ERROR] Echec Video ${videoId}:`, error)
-
-    // GESTION ERREUR : Statut Failed + Remboursement
-    await supabaseAdmin
-      .from('videos')
-      .update({ status: 'failed' })
-      .eq('id', videoId)
-
-    // On récupère les crédits actuels pour rembourser proprement
-    const { data: user } = await supabaseAdmin
-      .from('users')
-      .select('credits')
-      .eq('id', userId)
-      .single()
-      
-    if (user) {
-      await supabaseAdmin
-        .from('users')
-        .update({ credits: user.credits + 10 })
-        .eq('id', userId)
-      console.log(`[BG] Utilisateur ${userId} remboursé (10 crédits)`)
+// --- FONCTION DE GÉNÉRATION D-ID (Back-end process) ---
+async function generateVideoWithDID(videoId: string, script: string, avatarId: string, userId: string) {
+    const apiKey = process.env.DID_API_KEY
+    if (!apiKey) {
+        console.error("DID_API_KEY manquante")
+        await markAsFailed(videoId, userId)
+        return
     }
-  }
+
+    try {
+        const avatarUrl = AVATARS[avatarId] || AVATARS['emma']
+
+        // A. Création du Talk
+        const createTalkResponse = await fetch('https://api.d-id.com/talks', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Basic ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                source_url: avatarUrl,
+                script: {
+                    type: "text",
+                    input: script,
+                    provider: { type: "microsoft", voice_id: "fr-FR-DeniseNeural" }
+                },
+                config: {
+                    fluent: true,
+                    pad_audio: "0.0"
+                }
+            })
+        })
+
+        if (createTalkResponse.status !== 201) {
+            const err = await createTalkResponse.json()
+            throw new Error(`D-ID Error: ${JSON.stringify(err)}`)
+        }
+
+        const { id: talkId } = await createTalkResponse.json()
+        console.log(`[D-ID] Talk créé ID: ${talkId}`)
+
+        // B. Polling (Attente de la fin)
+        let status = "created"
+        let resultUrl = ""
+        let attempts = 0
+
+        while (status !== "done" && attempts < 30) { // Timeout ~60s
+            await new Promise(r => setTimeout(r, 2000))
+            
+            const statusRes = await fetch(`https://api.d-id.com/talks/${talkId}`, {
+                headers: { 'Authorization': `Basic ${apiKey}` }
+            })
+            const statusData = await statusRes.json()
+            
+            status = statusData.status
+            console.log(`[D-ID] Status: ${status}`)
+
+            if (status === "done") {
+                resultUrl = statusData.result_url
+            } else if (status === "error") {
+                throw new Error("D-ID Generation Failed")
+            }
+            attempts++
+        }
+
+        if (!resultUrl) throw new Error("Timeout D-ID")
+
+        // C. Sauvegarde Finale
+        await supabaseAdmin
+            .from('videos')
+            .update({
+                status: 'completed',
+                video_url: resultUrl,
+                completed_at: new Date().toISOString()
+            })
+            .eq('id', videoId)
+
+    } catch (error) {
+        console.error("Erreur Génération:", error)
+        await markAsFailed(videoId, userId)
+    }
+}
+
+// Helper pour gérer l'échec et le remboursement
+async function markAsFailed(videoId: string, userId: string) {
+    await supabaseAdmin.from('videos').update({ status: 'failed' }).eq('id', videoId)
+    
+    // Remboursement
+    const { data: u } = await supabaseAdmin.from('users').select('credits').eq('id', userId).single()
+    if (u) {
+        await supabaseAdmin.from('users').update({ credits: u.credits + 10 }).eq('id', userId)
+    }
 }
