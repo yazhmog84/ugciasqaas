@@ -1,253 +1,172 @@
-// app/create/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Video, Sparkles, MessageSquare, Mic, Layers } from 'lucide-react'
+import { ArrowLeft, Video, Sparkles, MessageSquare, Loader2 } from 'lucide-react'
 
-// Avatars simulés
-const avatars = [
-  { id: 'emma', name: 'Emma', image: 'https://i.pravatar.cc/150?img=1' },
-  { id: 'marcus', name: 'Marcus', image: 'https://i.pravatar.cc/150?img=12' },
-  { id: 'sophie', name: 'Sophie', image: 'https://i.pravatar.cc/150?img=5' },
-  { id: 'lucas', name: 'Lucas', image: 'https://i.pravatar.cc/150?img=13' },
-  { id: 'maya', name: 'Maya', image: 'https://i.pravatar.cc/150?img=9' },
-  { id: 'alex', name: 'Alex', image: 'https://i.pravatar.cc/150?img=15' },
+// Liste des avatars disponibles
+const AVATARS = [
+  { id: 'emma', name: 'Emma', type: 'Realistic', img: 'https://i.pravatar.cc/150?img=1' },
+  { id: 'marcus', name: 'Marcus', type: 'Business', img: 'https://i.pravatar.cc/150?img=12' },
+  { id: 'sophie', name: 'Sophie', type: 'Creative', img: 'https://i.pravatar.cc/150?img=5' },
 ]
 
 export default function CreateVideoPage() {
   const [script, setScript] = useState('')
-  const [selectedAvatar, setSelectedAvatar] = useState('emma')
-  const [credits, setCredits] = useState(0)
+  const [selectedAvatar, setSelectedAvatar] = useState(AVATARS[0].id)
+  const [credits, setCredits] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
 
+  // Charger les crédits au montage
   useEffect(() => {
-    loadUserCredits()
+    checkAuthAndCredits()
   }, [])
 
-  async function loadUserCredits() {
+  async function checkAuthAndCredits() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       router.push('/login')
       return
     }
-    const { data } = await supabase
-      .from('users')
-      .select('credits')
-      .eq('id', user.id)
-      .single()
-
+    const { data } = await supabase.from('users').select('credits').eq('id', user.id).single()
     if (data) setCredits(data.credits)
   }
 
- async function handleGenerate() {
-    if (!script.trim()) { setError('Le script ne peut pas être vide'); return }
-    if (credits < 10) { setError('Pas assez de crédits !'); return }
+  async function handleGenerate() {
+    if (!script.trim() || script.length < 10) {
+      setError('Le script est trop court (min 10 car.)')
+      return
+    }
+    if (credits !== null && credits < 10) {
+      setError('Crédits insuffisants. Rechargez votre compte.')
+      return
+    }
 
     setLoading(true)
     setError('')
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error("Non connecté")
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error("Session expirée")
 
-      // Appel à la nouvelle route API
-      const response = await fetch('/api/generate-video', {
+      const res = await fetch('/api/generate-video', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          script, 
-          avatarId: selectedAvatar,
-          userId: user.id, // On passe l'ID pour sécuriser côté serveur
-          options: { subtitles: true } 
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}` // Token pour Auth Supabase
+        },
+        body: JSON.stringify({
+          script,
+          avatarId: selectedAvatar
         })
       })
 
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error)
+      const data = await res.json()
+
+      if (!res.ok) throw new Error(data.error || "Erreur serveur")
       
-      // Redirection vers la page de visualisation
+      // Succès : on redirige immédiatement
       router.push(`/video/${data.videoId}`)
 
     } catch (err: any) {
-      setError(err.message || 'Une erreur est survenue')
-    } finally {
+      setError(err.message)
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      {/* Header */}
-      <header className="bg-slate-900/50 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/dashboard" className="flex items-center gap-2 text-slate-400 hover:text-white transition">
-            <ArrowLeft size={18} />
-            <span className="font-medium">Retour</span>
+    <div className="min-h-screen bg-slate-950 text-white p-4 lg:p-8">
+      <div className="max-w-6xl mx-auto">
+        
+        {/* Header simple */}
+        <div className="flex justify-between items-center mb-8">
+          <Link href="/dashboard" className="flex items-center gap-2 text-slate-400 hover:text-white">
+            <ArrowLeft size={20} /> Retour Dashboard
           </Link>
-          <div className="flex items-center gap-3 bg-white/5 px-4 py-1.5 rounded-full border border-white/10">
-            <span className="text-slate-400 text-sm">Crédits dispo :</span>
-            <span className="font-bold text-purple-400">{credits}</span>
+          <div className="bg-white/10 px-4 py-2 rounded-full border border-white/10">
+            <span className="text-slate-400">Crédits:</span> 
+            <span className="font-bold ml-2 text-purple-400">{credits !== null ? credits : '...'}</span>
           </div>
         </div>
-      </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-12">
-        <div className="mb-10">
-          <h1 className="text-3xl font-bold mb-2">Créer une nouvelle vidéo</h1>
-          <p className="text-slate-400">Configurez votre avatar et votre script pour générer votre vidéo UGC.</p>
-        </div>
+        <h1 className="text-3xl font-bold mb-8">Studio de Création IA</h1>
 
         {error && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-8 flex items-center gap-3">
-             <span className="text-xl">⚠️</span> {error}
+          <div className="bg-red-500/20 border border-red-500/50 text-red-200 p-4 rounded-xl mb-6">
+            🚨 {error}
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
           
-          {/* Colonne Gauche : Configuration */}
-          <div className="lg:col-span-2 space-y-8">
-            
-            {/* 1. Script */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
-                  <MessageSquare size={18} />
-                </div>
-                <h2 className="text-lg font-bold">Votre Script</h2>
-              </div>
-              
-              <div className="relative">
-                <textarea
-                  value={script}
-                  onChange={(e) => setScript(e.target.value)}
-                  placeholder="Écrivez votre script ici... (Ex: Hey ! Je viens de découvrir cette application incroyable...)"
-                  rows={8}
-                  className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
-                />
-                <div className="absolute bottom-4 right-4 text-xs text-slate-500">
-                  {script.length} caractères
-                </div>
-              </div>
-              <div className="mt-3 flex justify-between items-center text-sm text-slate-400">
-                 <p>Minimum 20 caractères</p>
-                 <p>~{Math.ceil(script.length / 200)} seconde(s)</p>
-              </div>
-            </div>
-
-            {/* 2. Options */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400">
-                  <Layers size={18} />
-                </div>
-                <h2 className="text-lg font-bold">Options de rendu</h2>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                 <label className="flex items-start gap-3 p-4 bg-black/20 rounded-xl border border-white/10 cursor-pointer hover:border-purple-500/50 transition">
-                   <input type="checkbox" className="mt-1 w-4 h-4 rounded border-slate-600 text-purple-600 focus:ring-purple-500 bg-slate-800" defaultChecked />
-                   <div>
-                     <div className="font-medium text-white">Sous-titres IA</div>
-                     <div className="text-xs text-slate-500 mt-0.5">Générés automatiquement</div>
-                   </div>
-                 </label>
-                 
-                 <label className="flex items-start gap-3 p-4 bg-black/20 rounded-xl border border-white/10 cursor-pointer hover:border-purple-500/50 transition">
-                   <input type="checkbox" className="mt-1 w-4 h-4 rounded border-slate-600 text-purple-600 focus:ring-purple-500 bg-slate-800" />
-                   <div>
-                     <div className="font-medium text-white">Musique de fond</div>
-                     <div className="text-xs text-slate-500 mt-0.5">Libre de droits</div>
-                   </div>
-                 </label>
+          {/* GAUCHE : SCRIPT */}
+          <div className="space-y-6">
+            <div className="bg-slate-900 border border-white/10 p-6 rounded-2xl">
+              <label className="flex items-center gap-2 text-lg font-bold mb-4">
+                <MessageSquare className="text-blue-400" /> Script
+              </label>
+              <textarea
+                value={script}
+                onChange={(e) => setScript(e.target.value)}
+                placeholder="Bonjour à tous ! Aujourd'hui je vous présente..."
+                className="w-full h-64 bg-black/30 border border-white/10 rounded-xl p-4 text-white focus:ring-2 focus:ring-purple-500 outline-none resize-none"
+              />
+              <div className="flex justify-between mt-2 text-xs text-slate-500">
+                <span>{script.length} caractères</span>
+                <span>~{Math.ceil(script.length / 15)} sec de vidéo</span>
               </div>
             </div>
           </div>
 
-          {/* Colonne Droite : Avatar & Action */}
-          <div className="space-y-8">
-            
-            {/* Avatar Selection */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-pink-500/20 flex items-center justify-center text-pink-400">
-                  <Sparkles size={18} />
-                </div>
-                <h2 className="text-lg font-bold">Choisir un avatar</h2>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                {avatars.map(avatar => (
+          {/* DROITE : AVATAR & ACTION */}
+          <div className="space-y-6">
+            <div className="bg-slate-900 border border-white/10 p-6 rounded-2xl">
+              <label className="flex items-center gap-2 text-lg font-bold mb-4">
+                <Sparkles className="text-purple-400" /> Choisir un Avatar
+              </label>
+              
+              <div className="grid grid-cols-3 gap-4">
+                {AVATARS.map((av) => (
                   <button
-                    key={avatar.id}
-                    onClick={() => setSelectedAvatar(avatar.id)}
-                    className={`relative rounded-xl overflow-hidden aspect-square border-2 transition-all ${
-                      selectedAvatar === avatar.id 
-                        ? 'border-purple-500 ring-2 ring-purple-500/20 scale-105 z-10' 
-                        : 'border-transparent hover:border-white/20 opacity-70 hover:opacity-100'
+                    key={av.id}
+                    onClick={() => setSelectedAvatar(av.id)}
+                    className={`relative rounded-xl overflow-hidden aspect-square transition border-2 ${
+                      selectedAvatar === av.id 
+                        ? 'border-purple-500 ring-2 ring-purple-500/20 scale-105' 
+                        : 'border-transparent hover:border-white/20 opacity-60 hover:opacity-100'
                     }`}
                   >
-                    <img src={avatar.image} alt={avatar.name} className="w-full h-full object-cover" />
-                    <div className="absolute bottom-0 inset-x-0 bg-black/60 p-1 text-center">
-                      <span className="text-[10px] font-bold uppercase tracking-wider">{avatar.name}</span>
+                    <img src={av.img} alt={av.name} className="object-cover w-full h-full" />
+                    <div className="absolute bottom-0 w-full bg-black/70 text-xs py-1 text-center font-bold">
+                      {av.name}
                     </div>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Resume & Action */}
-            <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 rounded-2xl p-6 sticky top-24">
-              <h3 className="text-lg font-bold mb-4">Récapitulatif</h3>
-              <ul className="space-y-3 mb-6 text-sm text-slate-300">
-                <li className="flex justify-between">
-                  <span>Coût vidéo</span>
-                  <span className="text-white font-bold">10 crédits</span>
-                </li>
-                <li className="flex justify-between">
-                  <span>Temps estimé</span>
-                  <span className="text-white font-bold">~2 mins</span>
-                </li>
-                <li className="border-t border-white/10 pt-3 flex justify-between">
-                  <span>Crédits restants</span>
-                  <span className={`${credits < 10 ? 'text-red-400' : 'text-green-400'} font-bold`}>
-                    {credits - 10}
-                  </span>
-                </li>
-              </ul>
-
-              <button
-                onClick={handleGenerate}
-                disabled={loading || !script || credits < 10}
-                className="w-full py-4 bg-white text-slate-900 rounded-xl font-bold hover:bg-slate-200 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-white/5 flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
-                    Génération...
-                  </>
-                ) : (
-                  <>
-                    <Video size={18} />
-                    Générer la vidéo
-                  </>
-                )}
-              </button>
-              
-              {credits < 10 && (
-                <Link href="/pricing" className="block text-center text-xs text-red-400 mt-3 hover:underline">
-                  Crédits insuffisants. Recharger →
-                </Link>
-              )}
+            <div className="bg-gradient-to-br from-indigo-900 to-purple-900 rounded-2xl p-6 border border-white/10">
+               <div className="flex justify-between items-center mb-4">
+                 <span className="text-indigo-200">Coût estimé</span>
+                 <span className="font-bold text-xl">10 Crédits</span>
+               </div>
+               <button
+                 onClick={handleGenerate}
+                 disabled={loading || credits === null || credits < 10}
+                 className="w-full bg-white text-slate-900 py-4 rounded-xl font-bold hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
+               >
+                 {loading ? <Loader2 className="animate-spin" /> : <Video />}
+                 {loading ? 'Lancement...' : 'Générer la vidéo'}
+               </button>
             </div>
           </div>
+
         </div>
-      </main>
+      </div>
     </div>
   )
 }
