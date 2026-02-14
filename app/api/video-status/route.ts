@@ -3,10 +3,9 @@ import { createClient } from '@/lib/supabase/server'
 
 export async function POST(req: Request) {
   try {
-    const { videoId } = await req.json() // ID de ta DB Supabase
+    const { videoId } = await req.json()
     const supabase = await createClient()
 
-    // 1. Récupérer l'ID D-ID stocké en base
     const { data: video } = await supabase
       .from('videos')
       .select('*')
@@ -15,23 +14,28 @@ export async function POST(req: Request) {
 
     if (!video) return NextResponse.json({ error: 'Vidéo introuvable' }, { status: 404 })
 
-    // Si déjà fini, on renvoie le résultat direct
     if (video.status === 'completed' || video.status === 'failed') {
       return NextResponse.json(video)
     }
 
-    // 2. Appeler D-ID pour vérifier le statut
+    // Encodage Clé API (Le même que dans generate-video)
+    const apiKey = process.env.DID_API_KEY || ''
+    const authHeader = apiKey.startsWith('Basic ') ? apiKey : `Basic ${Buffer.from(apiKey).toString('base64')}`
+
     const response = await fetch(`https://api.d-id.com/talks/${video.d_id_id}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Basic ${process.env.DID_API_KEY}`,
+        'Authorization': authHeader,
         'Content-Type': 'application/json',
       },
     })
 
+    if (!response.ok) {
+        return NextResponse.json(video) // On attend le prochain poll
+    }
+
     const didStatus = await response.json()
 
-    // 3. Mettre à jour Supabase si le statut a changé
     if (didStatus.status === 'done') {
       const { data: updated } = await supabase
         .from('videos')
@@ -45,16 +49,26 @@ export async function POST(req: Request) {
       return NextResponse.json(updated)
     } 
     else if (didStatus.status === 'error' || didStatus.status === 'rejected') {
+       // ÉCHEC DÉTECTÉ -> REMBOURSEMENT
+       
+       // 1. Marquer comme échoué
        const { data: updated } = await supabase
         .from('videos')
         .update({ status: 'failed' })
         .eq('id', videoId)
         .select()
         .single()
+       
+       // 2. Rembourser l'utilisateur
+       // On récupère les crédits actuels
+       const { data: user } = await supabase.from('users').select('credits').eq('id', video.user_id).single()
+       if (user) {
+           await supabase.from('users').update({ credits: user.credits + 10 }).eq('id', video.user_id)
+       }
+
       return NextResponse.json(updated)
     }
 
-    // Sinon, c'est encore en cours
     return NextResponse.json(video)
 
   } catch (error: any) {
