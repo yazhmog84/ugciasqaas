@@ -4,8 +4,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
-// CORRECTION ICI : Ajout de 'Film' dans les imports
-import { ArrowUpRight, Play, Clock, MoreVertical, Plus, Film } from 'lucide-react'
+import { ArrowUpRight, Play, Clock, MoreVertical, Plus } from 'lucide-react'
 
 export default function DashboardPage() {
   const [videos, setVideos] = useState<any[]>([])
@@ -26,7 +25,7 @@ export default function DashboardPage() {
     loadData()
   }, [])
 
-  if (loading) return <div className="text-white p-8">Chargement...</div>
+  if (loading) return <div className="text-white">Chargement...</div>
 
   return (
     <div className="space-y-8">
