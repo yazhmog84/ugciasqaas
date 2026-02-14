@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 export async function createClient() {
-  const cookieStore = await cookies() // 👈 L'ajout de 'await' est obligatoire ici en Next 15+
+  const cookieStore = await cookies() // 👈 L'ajout de 'await' est OBLIGATOIRE ici
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,7 +18,7 @@ export async function createClient() {
               cookieStore.set(name, value, options)
             )
           } catch {
-            // Ignorer si appelé depuis un Server Component
+            // Ignorer les erreurs d'écriture de cookies dans les Server Components
           }
         },
       },
