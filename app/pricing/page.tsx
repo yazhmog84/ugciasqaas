@@ -1,14 +1,22 @@
-// app/pricing/page.tsx
+'use client'
+
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import Link from 'next/link'
-import { Check, Star } from 'lucide-react'
+import { Check, Star, Loader2 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function PricingPage() {
- const plans = [
+  const [loading, setLoading] = useState<string | null>(null)
+  const router = useRouter()
+
+  const plans = [
     {
       name: "Starter",
       price: "49",
+      priceId: "price_XXXXXXXX1", // REMPLACE PAR TON ID STRIPE
       credits: 100,
       features: ["10 vidéos / mois", "Avatars standards", "Sans filigrane", "Support email"],
       popular: false,
@@ -17,6 +25,7 @@ export default function PricingPage() {
     {
       name: "Pro",
       price: "99",
+      priceId: "price_XXXXXXXX2", // REMPLACE PAR TON ID STRIPE
       credits: 250,
       features: ["25 vidéos / mois", "Tous les avatars (+50)", "Sous-titres IA", "Rendu prioritaire"],
       popular: true,
@@ -25,6 +34,7 @@ export default function PricingPage() {
     {
       name: "Agency",
       price: "249",
+      priceId: "price_XXXXXXXX3", // REMPLACE PAR TON ID STRIPE
       credits: 1000,
       features: ["100 vidéos / mois", "API Access", "Clonage de voix", "Account Manager"],
       popular: false,
@@ -32,71 +42,82 @@ export default function PricingPage() {
     }
   ]
 
+  async function handleCheckout(plan: any) {
+    setLoading(plan.name)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        router.push('/login?redirect=/pricing')
+        return
+      }
+
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          priceId: plan.priceId,
+          planCredits: plan.credits
+        })
+      })
+
+      const data = await res.json()
+      if (data.url) window.location.href = data.url
+      else throw new Error('Erreur Stripe')
+
+    } catch (error) {
+      console.error(error)
+      alert("Une erreur est survenue. Vérifiez votre connexion.")
+    } finally {
+      setLoading(null)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <Navbar />
-
       <main className="pt-32 pb-24 px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-16">
           <h1 className="text-4xl md:text-5xl font-bold mb-6">Investissez dans votre croissance</h1>
-          <p className="text-xl text-slate-400">
-            Des crédits flexibles. Pas d'abonnement caché. Vous payez ce que vous utilisez.
-          </p>
+          <p className="text-xl text-slate-400">Paiement sécurisé. Facture immédiate.</p>
         </div>
 
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
           {plans.map((plan, i) => (
-            <div 
-              key={i} 
-              className={`relative bg-slate-900/50 backdrop-blur-xl rounded-2xl p-8 border ${plan.color} flex flex-col ${plan.popular ? 'shadow-2xl scale-105 z-10' : 'hover:border-white/20 transition'}`}
-            >
+            <div key={i} className={`relative bg-slate-900/50 backdrop-blur-xl rounded-2xl p-8 border ${plan.color} flex flex-col ${plan.popular ? 'shadow-2xl scale-105 z-10' : 'hover:border-white/20 transition'}`}>
               {plan.popular && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-1 rounded-full text-sm font-bold flex items-center gap-1 shadow-lg">
                   <Star size={12} fill="white" /> Populaire
                 </div>
               )}
-
               <div className="mb-8">
                 <h3 className="text-lg font-medium text-slate-300 mb-2">{plan.name}</h3>
                 <div className="flex items-baseline gap-1">
                   <span className="text-5xl font-bold text-white">{plan.price}€</span>
-                  <span className="text-slate-500">/ pack</span>
                 </div>
                 <div className="mt-4 inline-block bg-white/5 rounded-lg px-3 py-1 text-sm text-purple-300 border border-white/10">
                   {plan.credits} Crédits inclus
                 </div>
               </div>
-
               <ul className="space-y-4 mb-8 flex-1">
-                {plan.features.map((feature, idx) => (
-                  <li key={idx} className="flex items-center gap-3 text-slate-300">
-                    <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">
-                      <Check size={12} className="text-green-400" />
-                    </div>
-                    <span className="text-sm">{feature}</span>
-                  </li>
+                {plan.features.map((f, idx) => (
+                  <li key={idx} className="flex items-center gap-3 text-slate-300"><Check size={12} className="text-green-400" /> <span className="text-sm">{f}</span></li>
                 ))}
               </ul>
-
-              <button className={`w-full py-4 rounded-xl font-bold transition ${
-                plan.popular 
-                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg' 
-                  : 'bg-white text-slate-900 hover:bg-slate-200'
-              }`}>
-                Choisir ce pack
+              <button 
+                onClick={() => handleCheckout(plan)}
+                disabled={loading === plan.name}
+                className={`w-full py-4 rounded-xl font-bold transition flex items-center justify-center gap-2 ${plan.popular ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : 'bg-white text-slate-900 hover:bg-slate-200'}`}
+              >
+                {loading === plan.name ? <Loader2 className="animate-spin" /> : 'Choisir ce pack'}
               </button>
             </div>
           ))}
         </div>
-
-        <div className="mt-16 text-center">
-          <p className="text-slate-500 text-sm">
-            Paiement sécurisé via Stripe. Facture disponible instantanément. <br/>
-            Besoin de plus ? <Link href="/contact" className="text-purple-400 underline">Contactez-nous</Link> pour une offre Enterprise.
-          </p>
-        </div>
       </main>
-
       <Footer />
     </div>
   )

@@ -3,9 +3,11 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, PlusCircle, Film, CreditCard, Settings, LogOut, Sparkles, Bell, Search } from 'lucide-react'
+import { LayoutDashboard, PlusCircle, Film, CreditCard, Settings, LogOut, Sparkles, Bell, Search, Image as ImageIcon } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+
+
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -17,6 +19,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Mes Vidéos', href: '/dashboard/library', icon: Film }, // Tu pourras créer cette page plus tard
     { name: 'Abonnement', href: '/pricing', icon: CreditCard },
     { name: 'Paramètres', href: '/dashboard/settings', icon: Settings },
+    { name: 'Créer une Pub Image', href: '/create-image', icon: ImageIcon },
   ]
 
   async function handleLogout() {
