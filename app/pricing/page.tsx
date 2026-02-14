@@ -5,28 +5,28 @@ import Link from 'next/link'
 import { Check, Star } from 'lucide-react'
 
 export default function PricingPage() {
-  const plans = [
+ const plans = [
     {
-      name: "Découverte",
-      price: "29",
-      credits: 30,
-      features: ["3 vidéos HD", "10 Avatars standards", "Filigrane discret", "Support email"],
+      name: "Starter",
+      price: "49",
+      credits: 100,
+      features: ["10 vidéos / mois", "Avatars standards", "Sans filigrane", "Support email"],
       popular: false,
       color: "border-white/10"
     },
     {
-      name: "Créateur",
-      price: "79",
-      credits: 100,
-      features: ["10 vidéos HD", "Tous les avatars (+50)", "Pas de filigrane", "Sous-titres auto", "Support prioritaire"],
+      name: "Pro",
+      price: "99",
+      credits: 250,
+      features: ["25 vidéos / mois", "Tous les avatars (+50)", "Sous-titres IA", "Rendu prioritaire"],
       popular: true,
       color: "border-purple-500 shadow-purple-900/20"
     },
     {
-      name: "Agence",
-      price: "199",
-      credits: 300,
-      features: ["30 vidéos HD", "Mode API", "Clonage de voix", "Avatars 4K", "Account Manager dédié"],
+      name: "Agency",
+      price: "249",
+      credits: 1000,
+      features: ["100 vidéos / mois", "API Access", "Clonage de voix", "Account Manager"],
       popular: false,
       color: "border-white/10"
     }

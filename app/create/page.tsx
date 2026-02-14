@@ -44,29 +44,33 @@ export default function CreateVideoPage() {
     if (data) setCredits(data.credits)
   }
 
-  async function handleGenerate() {
+ async function handleGenerate() {
     if (!script.trim()) { setError('Le script ne peut pas être vide'); return }
-    if (script.length < 20) { setError('Le script doit faire au moins 20 caractères'); return }
     if (credits < 10) { setError('Pas assez de crédits !'); return }
 
     setLoading(true)
     setError('')
 
     try {
-      // Pour l'authentification de la route API
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      const response = await fetch('/api/create-user', { // Note: On utilisera 'api/generate-video' idéalement
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("Non connecté")
+
+      // Appel à la nouvelle route API
+      const response = await fetch('/api/generate-video', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({ script, avatarId: selectedAvatar })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          script, 
+          avatarId: selectedAvatar,
+          userId: user.id, // On passe l'ID pour sécuriser côté serveur
+          options: { subtitles: true } 
+        })
       })
 
       const data = await response.json()
       if (!response.ok) throw new Error(data.error)
+      
+      // Redirection vers la page de visualisation
       router.push(`/video/${data.videoId}`)
 
     } catch (err: any) {
