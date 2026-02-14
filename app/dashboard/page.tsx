@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client' 
 // CORRECTION : Ajout de 'Film' ici
 import { ArrowUpRight, Play, Clock, MoreVertical, Plus, Film } from 'lucide-react'
 
@@ -10,6 +11,7 @@ export default function DashboardPage() {
   const [videos, setVideos] = useState<any[]>([])
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const supabase = createClient()
 
   useEffect(() => {
     async function loadData() {
