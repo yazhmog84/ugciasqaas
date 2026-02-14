@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase/server' // <-- Utilisation du client admin pour les opérations sécurisées
 
 // Configuration des Avatars (URLs publiques accessibles par D-ID)
 const AVATARS: Record<string, string> = {

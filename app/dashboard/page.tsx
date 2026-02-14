@@ -1,25 +1,24 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+// CORRECTION 1 : On supprime l'import de '@/lib/supabase'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client' 
-// CORRECTION : Ajout de 'Film' ici
 import { ArrowUpRight, Play, Clock, MoreVertical, Plus, Film } from 'lucide-react'
 
 export default function DashboardPage() {
   const [videos, setVideos] = useState<any[]>([])
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  
+  // CORRECTION 2 : C'est la seule déclaration de supabase
   const supabase = createClient()
 
   useEffect(() => {
     async function loadData() {
-      // Sécurisation : on vérifie la session
       const { data: { session } } = await supabase.auth.getSession()
       
       if (session?.user) {
-        // 1. Charger les infos user
         const { data: userData } = await supabase
           .from('users')
           .select('*')
@@ -28,7 +27,6 @@ export default function DashboardPage() {
         
         if (userData) setUser(userData)
 
-        // 2. Charger les vidéos
         const { data: videosData } = await supabase
           .from('videos')
           .select('*')
@@ -41,7 +39,7 @@ export default function DashboardPage() {
       setLoading(false)
     }
     loadData()
-  }, [])
+  }, []) // On garde le tableau de dépendances vide pour ne charger qu'une fois
 
   if (loading) {
     return (
@@ -67,7 +65,6 @@ export default function DashboardPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Crédits */}
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6 relative overflow-hidden group hover:border-purple-500/30 transition">
           <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/10 rounded-full blur-3xl group-hover:bg-purple-600/20 transition"></div>
           <p className="text-slate-400 text-sm font-medium mb-1">Crédits restants</p>
@@ -77,7 +74,6 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* Vidéos générées */}
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6 relative overflow-hidden group hover:border-blue-500/30 transition">
           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 rounded-full blur-3xl group-hover:bg-blue-600/20 transition"></div>
           <p className="text-slate-400 text-sm font-medium mb-1">Vidéos générées</p>
@@ -87,7 +83,6 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* Plan */}
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6 relative overflow-hidden group hover:border-pink-500/30 transition">
            <div className="absolute top-0 right-0 w-32 h-32 bg-pink-600/10 rounded-full blur-3xl group-hover:bg-pink-600/20 transition"></div>
           <p className="text-slate-400 text-sm font-medium mb-1">Plan Actuel</p>
@@ -118,7 +113,6 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {videos.map((video) => (
               <div key={video.id} className="bg-slate-900 border border-white/10 rounded-xl overflow-hidden group hover:border-white/20 transition">
-                {/* Thumbnail */}
                 <div className="aspect-video bg-black relative flex items-center justify-center group-hover:bg-black/80 transition">
                    {video.status === 'completed' ? (
                      <video src={video.video_url} className="w-full h-full object-cover opacity-60 group-hover:opacity-40 transition" />

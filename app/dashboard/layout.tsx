@@ -1,22 +1,19 @@
-// app/dashboard/layout.tsx
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { LayoutDashboard, PlusCircle, Film, CreditCard, Settings, LogOut, Sparkles, Bell, Search, Image as ImageIcon } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
-
-
+import { createClient } from '@/lib/supabase/client' // <-- CORRECTION ICI (Client, pas Server)
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const supabase = createClient() // <-- Initialisation du client
 
   const navigation = [
     { name: 'Vue d\'ensemble', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Créer une vidéo', href: '/create', icon: PlusCircle },
-    { name: 'Mes Vidéos', href: '/dashboard/library', icon: Film }, // Tu pourras créer cette page plus tard
+    { name: 'Mes Vidéos', href: '/dashboard/library', icon: Film },
     { name: 'Abonnement', href: '/pricing', icon: CreditCard },
     { name: 'Paramètres', href: '/dashboard/settings', icon: Settings },
     { name: 'Créer une Pub Image', href: '/create-image', icon: ImageIcon },
@@ -24,13 +21,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   async function handleLogout() {
     await supabase.auth.signOut()
+    router.refresh() // Rafraîchit les Server Components
     router.push('/login')
   }
 
   return (
     <div className="min-h-screen bg-slate-950 flex">
       {/* SIDEBAR */}
-    <aside className="w-64 bg-slate-900/50 backdrop-blur-xl border-r border-white/5 flex flex-col fixed h-full z-20 hidden md:flex">
+      <aside className="w-64 bg-slate-900/50 backdrop-blur-xl border-r border-white/5 flex flex-col fixed h-full z-20 hidden md:flex">
         <div className="p-6">
           <Link href="/" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase' // Assure-toi d'utiliser le bon client
+import { supabase } from '@/lib/supabase/client' // Assure-toi d'utiliser le bon client
 // Ou import { createClient } from '@/lib/supabase/client' si tu as migré
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
