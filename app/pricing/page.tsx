@@ -2,21 +2,23 @@
 
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
-import Link from 'next/link'
-import { Check, Star, Loader2 } from 'lucide-react'
-import { supabase } from '@/lib/supabase/client'
+import { createClient } from '@/lib/supabase/client' // 👈 Correction 1 : On importe la fonction, pas l'objet
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Check, Star, Loader2 } from 'lucide-react'
 
 export default function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null)
   const router = useRouter()
+  
+  // 👈 Correction 2 : On initialise le client Supabase ici
+  const supabase = createClient()
 
   const plans = [
     {
       name: "Starter",
       price: "49",
-      priceId: "price_XXXXXXXX1", // REMPLACE PAR TON ID STRIPE
+      priceId: "price_XXXXXXXX1", // Pense à mettre tes vrais IDs Stripe
       credits: 100,
       features: ["10 vidéos / mois", "Avatars standards", "Sans filigrane", "Support email"],
       popular: false,
@@ -25,7 +27,7 @@ export default function PricingPage() {
     {
       name: "Pro",
       price: "99",
-      priceId: "price_XXXXXXXX2", // REMPLACE PAR TON ID STRIPE
+      priceId: "price_XXXXXXXX2",
       credits: 250,
       features: ["25 vidéos / mois", "Tous les avatars (+50)", "Sous-titres IA", "Rendu prioritaire"],
       popular: true,
@@ -34,7 +36,7 @@ export default function PricingPage() {
     {
       name: "Agency",
       price: "249",
-      priceId: "price_XXXXXXXX3", // REMPLACE PAR TON ID STRIPE
+      priceId: "price_XXXXXXXX3",
       credits: 1000,
       features: ["100 vidéos / mois", "API Access", "Clonage de voix", "Account Manager"],
       popular: false,
@@ -45,17 +47,21 @@ export default function PricingPage() {
   async function handleCheckout(plan: any) {
     setLoading(plan.name)
     try {
+      // Vérification de la session
       const { data: { session } } = await supabase.auth.getSession()
       
+      // Si pas connecté, on redirige vers le login avec un paramètre de retour
       if (!session) {
-        router.push('/login?redirect=/pricing')
+        router.push(`/login?redirect=/pricing`)
         return
       }
 
+      // Appel à ton API Stripe
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          // On envoie le token pour que le back puisse vérifier l'identité (optionnel si cookies gérés, mais plus sûr)
           'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
@@ -64,13 +70,22 @@ export default function PricingPage() {
         })
       })
 
-      const data = await res.json()
-      if (data.url) window.location.href = data.url
-      else throw new Error('Erreur Stripe')
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Erreur lors de la création du checkout')
+      }
 
-    } catch (error) {
+      const data = await res.json()
+      
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        throw new Error('Pas d\'URL de redirection Stripe reçue')
+      }
+
+    } catch (error: any) {
       console.error(error)
-      alert("Une erreur est survenue. Vérifiez votre connexion.")
+      alert(error.message || "Une erreur est survenue.")
     } finally {
       setLoading(null)
     }
